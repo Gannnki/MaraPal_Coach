@@ -1,0 +1,24 @@
+# Cloned upstream knowledge base — reproduced by ingest/clone_wiki.sh, not committed.
+# It is a git repo of its own; committing it would nest one repo inside another.
+data/raw/running-wiki/
+
+# Fetched data. Regenerable, dated, and large.
+data/raw/races/
+data/processed/
+data/vector/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Local environment
+.env
+.env.local
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store

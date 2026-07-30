@@ -1,7 +1,14 @@
-# To be filled in once the stack is chosen. Expected to include:
+# Embedding pipeline
+numpy>=2.0
+PyYAML>=6.0.3
+qdrant-client>=1.15
+sentence-transformers>=5.0
+
+# To be filled in once the remaining stack is chosen. Expected to include:
 # - vector store client (qdrant-client or elasticsearch)
-# - embeddings (sentence-transformers, or an LLM provider SDK)
 # - LLM client SDK
 # - streamlit / fastapi (interface)
+# - python-frontmatter, markdown (parsing the running.wiki bundle)
+# - sqlalchemy (race event store)
+# - requests (race calendar APIs)
 # - pandas (data processing)
-# - beautifulsoup4, requests (web scraping)
