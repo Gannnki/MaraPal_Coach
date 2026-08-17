@@ -4,18 +4,19 @@
   <strong>English</strong> | <a href="README.zh-CN.md">简体中文</a>
 </p>
 
-**Live MVP:** [https://talisman-headset-deluge.ngrok-free.dev/](https://talisman-headset-deluge.ngrok-free.dev/)
+🚀 **Try the live MVP:** [https://talisman-headset-deluge.ngrok-free.dev/](https://talisman-headset-deluge.ngrok-free.dev/)
 
 MaraPal Coach is an evidence-aware running assistant and one part of the wider
-**MaraPal** product. This repository is an MVP created as an **LLM Zoomcamp
-course project** and is intended for learning and demonstration only. The demo
-is self-hosted, so it is available only while the host computer is online.
+**MaraPal** product. Think of it as the first small, working piece of that
+product. I built this MVP as an **LLM Zoomcamp course project**, so it is for
+learning and demonstration rather than production use. The demo is
+self-hosted and is available only while my computer is online.
 
 Users bring their own OpenAI API key. The key is kept only in the current
 Streamlit session and is not stored in SQLite, Chroma, application logs, or
 LangSmith.
 
-## What it does
+## 🏃 What it does
 
 MaraPal Coach handles two types of questions:
 
@@ -30,7 +31,7 @@ Examples:
 - `Does beetroot juice improve running performance?`
 - `Show me five half marathons in Bayern.`
 
-## Technical flow
+## 🧭 How it works
 
 ```mermaid
 flowchart LR
@@ -46,7 +47,7 @@ flowchart LR
     G -. traces .-> LS[LangSmith]
 ```
 
-### LangGraph workflow
+### 🔀 LangGraph workflow
 
 ```text
 question
@@ -60,7 +61,7 @@ classify route, writing style, and answer detail
 The style classifier adapts the presentation to casual, neutral, or academic
 wording. It does not change the evidence, citation, or safety requirements.
 
-## Technology stack
+## 🧰 Technology stack
 
 | Area | Technology |
 |---|---|
@@ -77,7 +78,7 @@ wording. It does not change the evidence, citation, or safety requirements.
 | Ingestion | Kestra with PostgreSQL metadata |
 | Containers | Docker Compose |
 
-## Data sources
+## 📚 Data sources
 
 | Data | Source | Use |
 |---|---|---|
@@ -89,9 +90,9 @@ assumed to be open only because an event is in the future. When registration
 cannot be verified, the application returns `unknown` and shows the available
 event link.
 
-## Evaluation results
+## 📊 Evaluation results
 
-### Retrieval
+### 🔎 Retrieval
 
 The same 15 labelled questions were used to compare BM25, vector, and hybrid
 retrieval at Top-5.
@@ -104,7 +105,7 @@ retrieval at Top-5.
 
 Vector retrieval had the best MRR@5 and is used in the application.
 
-### LLM output
+### 💬 LLM output
 
 OpenAI generated the answers and Gemini judged two prompt variants through
 DeepEval GEval. Both prompts used the same frozen Vector Top-5 context.
@@ -122,7 +123,7 @@ DeepEval GEval. Both prompts used the same frozen Vector Top-5 context.
 Prompt A is used because it kept stronger evidence fidelity and style alignment
 while generating answers much faster.
 
-## Run with Docker
+## 🐳 Run with Docker
 
 Requirements:
 
@@ -174,7 +175,7 @@ Stop the stack with:
 docker compose down
 ```
 
-## Kestra ingestion
+## ⚙️ Kestra ingestion
 
 The flow in [`kestra/ingestion.yml`](kestra/ingestion.yml) runs every Monday at
 04:00 Europe/Berlin and can also be started manually.
@@ -196,7 +197,7 @@ After starting Docker Compose, open `http://localhost:8080`, import
 **Execute**. `KESTRA_SECRET_OPENAI_API_KEY` from `.env` is used for indexing;
 it is separate from the API key entered by application users.
 
-## Tests
+## ✅ Tests
 
 The ordinary test suite is offline and does not call OpenAI, Gemini, or
 LangSmith:
@@ -205,7 +206,7 @@ LangSmith:
 uv run pytest -q
 ```
 
-## Disclaimer
+## ⚠️ Disclaimer
 
 MaraPal Coach is a learning project and provides general running information,
 not medical diagnosis, treatment, or personalized medical advice. MaraPal is

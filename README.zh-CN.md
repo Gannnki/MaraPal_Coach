@@ -4,16 +4,17 @@
   <a href="README.md">English</a> | <strong>简体中文</strong>
 </p>
 
-**在线 MVP：** [https://talisman-headset-deluge.ngrok-free.dev/](https://talisman-headset-deluge.ngrok-free.dev/)
+🚀 **体验在线 MVP：** [https://talisman-headset-deluge.ngrok-free.dev/](https://talisman-headset-deluge.ngrok-free.dev/)
 
 MaraPal Coach 是一个基于证据的跑步助手，也是完整 **MaraPal** 产品的一部分。
-这个仓库是作为 **LLM Zoomcamp 课程作业**开发的 MVP，仅用于学习和功能展示。
-演示服务运行在开发者自己的电脑上，因此只有主机在线时才能访问。
+你可以把它理解成 MaraPal 第一个可以实际使用的小模块。我把这个 MVP 作为
+**LLM Zoomcamp 课程作业**完成，目前主要用于学习和功能展示，还不是正式的
+生产产品。演示服务运行在我的电脑上，所以只有电脑在线时才能访问。
 
 用户需要提供自己的 OpenAI API Key。Key 只保存在当前 Streamlit Session 中，
 不会写入 SQLite、Chroma、应用日志或 LangSmith。
 
-## 项目功能
+## 🏃 项目功能
 
 MaraPal Coach 处理两类问题：
 
@@ -28,7 +29,7 @@ MaraPal Coach 处理两类问题：
 - `甜菜根汁可以提高跑步表现吗？`
 - `帮我找五场在 Bayern 举办的半程马拉松。`
 
-## 技术路线
+## 🧭 工作原理
 
 ```mermaid
 flowchart LR
@@ -44,7 +45,7 @@ flowchart LR
     G -. Traces .-> LS[LangSmith]
 ```
 
-### LangGraph 工作流
+### 🔀 LangGraph 工作流
 
 ```text
 用户问题
@@ -58,7 +59,7 @@ flowchart LR
 风格分类会根据用户的表达选择口语、普通或学术风格，但不会改变证据、引用和
 安全要求。
 
-## 技术栈
+## 🧰 技术栈
 
 | 部分 | 技术 |
 |---|---|
@@ -75,7 +76,7 @@ flowchart LR
 | 数据摄取 | Kestra，使用 PostgreSQL 保存元数据 |
 | 容器 | Docker Compose |
 
-## 数据来源
+## 📚 数据来源
 
 | 数据 | 来源 | 用途 |
 |---|---|---|
@@ -85,9 +86,9 @@ flowchart LR
 running.wiki 使用 MIT License。系统不会因为比赛日期还没到就默认报名仍然开放。
 如果无法验证报名状态，会返回 `unknown` 并提供已有的赛事链接。
 
-## Evaluation 结果
+## 📊 Evaluation 结果
 
-### Retrieval Evaluation
+### 🔎 Retrieval Evaluation
 
 使用相同的 15 个标注问题，对 BM25、Vector 和 Hybrid 的 Top-5 结果进行比较。
 
@@ -99,7 +100,7 @@ running.wiki 使用 MIT License。系统不会因为比赛日期还没到就默�
 
 Vector Retrieval 的 MRR@5 最好，因此应用最终选择 Vector Search。
 
-### LLM Evaluation
+### 💬 LLM Evaluation
 
 OpenAI 负责生成回答，Gemini 通过 DeepEval GEval 对两个 Prompt 进行评估。
 两个 Prompt 使用相同且固定的 Vector Top-5 上下文。
@@ -117,7 +118,7 @@ OpenAI 负责生成回答，Gemini 通过 DeepEval GEval 对两个 Prompt 进行
 Prompt A 的 Evidence Fidelity 和 Style Alignment 更好，而且生成速度明显更快，
 所以最终使用 Prompt A。
 
-## 使用 Docker
+## 🐳 使用 Docker
 
 需要准备：
 
@@ -169,7 +170,7 @@ docker compose ps
 docker compose down
 ```
 
-## Kestra Ingestion
+## ⚙️ Kestra Ingestion
 
 [`kestra/ingestion.yml`](kestra/ingestion.yml) 每周一欧洲柏林时间 04:00 自动运行，
 也可以手动启动。
@@ -191,7 +192,7 @@ Docker Compose 启动后打开 `http://localhost:8080`，将
 `.env` 中的 `KESTRA_SECRET_OPENAI_API_KEY` 用于建立索引，与应用用户输入的
 API Key 无关。
 
-## 测试
+## ✅ 测试
 
 普通测试保持离线，不会请求 OpenAI、Gemini 或 LangSmith：
 
@@ -199,7 +200,7 @@ API Key 无关。
 uv run pytest -q
 ```
 
-## 免责声明
+## ⚠️ 免责声明
 
 MaraPal Coach 是学习项目，只提供一般跑步信息，不构成医疗诊断、治疗或个性化
 医疗建议。MaraPal 与 running.wiki、DLV 和 laufen.de 没有关联。
