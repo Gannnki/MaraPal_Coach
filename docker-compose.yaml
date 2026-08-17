@@ -1,0 +1,132 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    restart: unless-stopped
+    
+    env_file:
+      - .env
+
+    environment:
+      MARAPAL_CHROMA_PATH: /data/chroma
+      MARAPAL_RACE_DB: /data/processed/races.sqlite3
+      MARAPAL_MONITORING_DB: /data/processed/monitoring.sqlite3
+      MARAPAL_KNOWLEDGE_PATH: /data/processed/knowledge.jsonl
+
+    ports:
+      - "127.0.0.1:8000:8000"
+
+    volumes:
+      - ./data/vector/chroma:/data/chroma
+      - ./data/processed:/data/processed
+
+    healthcheck:
+      test: 
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  streamlit:
+    build:
+      context: .
+      dockerfile: docker/streamlit.Dockerfile
+    restart: unless-stopped
+
+    environment:
+      MARAPAL_API_URL: http://api:8000
+
+    ports:
+      - "127.0.0.1:8501:8501"
+
+    depends_on:
+      api:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16
+    container_name: marapal_postgres
+    restart: always
+
+    environment:
+      POSTGRES_USER: ${KESTRA_DB_USER:?KESTRA_DB_USER is required}
+      POSTGRES_PASSWORD: ${KESTRA_DB_PASSWORD:?KESTRA_DB_PASSWORD is required}
+      POSTGRES_DB: ${KESTRA_DB_NAME:?KESTRA_DB_NAME is required}
+
+    volumes:
+      - kestra_postgres:/var/lib/postgresql/data
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  kestra:
+    image: kestra/kestra:latest
+    user: "root"
+    restart: unless-stopped
+    command: server standalone --worker-thread=32
+
+    environment:
+      SECRET_OPENAI_API_KEY: ${KESTRA_SECRET_OPENAI_API_KEY:?KESTRA OpenAI secret is required}
+      UV_PROJECT_ENVIRONMENT: /tmp/kestra-wd/marapal-venv
+      UV_NO_PROGRESS: "1"
+      KESTRA_CONFIGURATION: |
+        datasources:
+          postgres:
+            url: jdbc:postgresql://postgres:5432/${KESTRA_DB_NAME:?KESTRA_DB_NAME is required}
+            driver-class-name: org.postgresql.Driver
+            username: ${KESTRA_DB_USER:?KESTRA_DB_USER is required}
+            password: ${KESTRA_DB_PASSWORD:?KESTRA_DB_PASSWORD is required}
+  
+        kestra:
+          repository:
+            type: postgres
+
+          queue:
+            type: postgres
+
+          storage:
+            type: local
+            local:
+              base-path: /app/storage
+            
+          tasks:
+            tmp-dir:
+              path: /tmp/kestra-wd/tmp
+
+          server:
+            basic-auth:
+              enabled: false
+          
+          url: http://localhost:8080/
+
+    ports:
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8081:8081"
+
+    volumes:
+      - kestra_data:/app/storage
+      - /tmp/kestra-wd:/tmp/kestra-wd
+      - ./:/workspace/MaraPal
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  kestra_postgres:
+  kestra_data:

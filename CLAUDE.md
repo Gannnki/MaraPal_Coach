@@ -4,18 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project state
 
-Early scaffold. One working script exists; everything else is empty.
+The application uses LangChain, LangGraph, LangSmith, ChromaDB, and SQLite. See
+`README.md` for the current commands and architecture.
 
 ```bash
 # Fetch and normalise the German race calendar (no dependencies beyond stdlib)
 python ingest/dlv_calendar.py --out data/raw/races/dlv/$(date +%F).jsonl
 ```
 
-`rag/`, `eval/`, `app/` and `docker/` are empty, and `docker-compose.yml` is planned but does not exist. There is no test suite and no lint config yet — do not invent commands for them; add real ones as the code lands.
-
-`requirements.txt` is a comment-only stub listing intended dependency *categories*, not pinned packages.
-
-`requirements.txt` is a comment-only stub listing intended dependency *categories*, not pinned packages.
+`rag/` contains the query workflow and `tests/` contains the initial unit suite.
 
 ## What this project is
 
@@ -78,20 +75,11 @@ MIT requires the licence and copyright notice be preserved in distribution. Answ
 
 Every health, injury, or nutrition page upstream carries a "Not medical advice" warning. Generated answers on those topics should carry the equivalent.
 
-## Undecided technology choices
+## Technology choices
 
-Do not assume a stack:
-
-| Layer | Candidates |
-|---|---|
-| Vector store | Qdrant or Elasticsearch |
-| Event store | Postgres or SQLite (SQLite is sufficient at this scale) |
-| Embeddings | an open-source sentence embedding model (undecided) |
-| LLM | undecided |
-| Interface | Streamlit or FastAPI |
-| Monitoring | self-hosted logging + Grafana |
-
-If you need to pick one to make progress, say so explicitly and keep the choice behind a thin interface rather than spreading it across `ingest/` and `rag/`.
+Keep provider and storage choices centralized in `rag/config.py`: ChromaDB for prose,
+SQLite for events, OpenAI embeddings and chat models, and opt-in
+LangSmith tracing. Never move race records into ChromaDB.
 
 ## Evaluation
 

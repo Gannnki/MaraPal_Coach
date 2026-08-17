@@ -1,0 +1,17 @@
+[
+  {"question": "What is the difference between LT1 and LT2?", "relevant_pages": ["concepts/lactate-threshold"]},
+  {"question": "How much training should be easy running?", "relevant_pages": ["techniques/polarised-training"]},
+  {"question": "Does sodium bicarbonate improve running performance?", "relevant_pages": ["nutrition/sodium-bicarbonate"]},
+  {"question": "What are the risks of low iron for runners?", "relevant_pages": ["nutrition/iron"]},
+  {"question": "How does the menstrual cycle affect training?", "relevant_pages": ["concepts/menstrual-cycle-and-training"]},
+  {"question": "How should I reduce training before a marathon?", "relevant_pages": ["techniques/tapering"]},
+  {"question": "Does caffeine improve endurance running performance?", "relevant_pages": ["nutrition/caffeine"]},
+  {"question": "Do carbon-plated shoes make runners faster?", "relevant_pages": ["gear/carbon-plate"]},
+  {"question": "How important is sleep for running recovery?", "relevant_pages": ["recovery/sleep"]},
+  {"question": "What causes plantar fasciopathy and how should runners manage it?", "relevant_pages": ["injury/plantar-fasciopathy"]},
+  {"question": "What is VO2max and why does it matter for runners?", "relevant_pages": ["concepts/vo2max"]},
+  {"question": "Should distance runners do strength training?", "relevant_pages": ["techniques/strength-training-for-runners"]},
+  {"question": "How should runners acclimate to training in hot weather?", "relevant_pages": ["techniques/heat-acclimation"]},
+  {"question": "How much protein do runners need for recovery?", "relevant_pages": ["nutrition/protein-and-recovery"]},
+  {"question": "What is RED-S and what warning signs should runners know?", "relevant_pages": ["nutrition/red-s"]}
+]

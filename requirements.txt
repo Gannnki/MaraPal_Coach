@@ -1,14 +1,13 @@
-# Embedding pipeline
-numpy>=2.0
+# pyproject.toml is the source of truth; this file supports pip users.
+langchain>=0.3
+langchain-chroma>=0.2
+langchain-openai>=0.3
+langgraph>=0.4
+langsmith>=0.3
 PyYAML>=6.0.3
-qdrant-client>=1.15
-sentence-transformers>=5.0
-
-# To be filled in once the remaining stack is chosen. Expected to include:
-# - vector store client (qdrant-client or elasticsearch)
-# - LLM client SDK
-# - streamlit / fastapi (interface)
-# - python-frontmatter, markdown (parsing the running.wiki bundle)
-# - sqlalchemy (race event store)
-# - requests (race calendar APIs)
-# - pandas (data processing)
+python-dotenv>=1.1
+rank-bm25>=0.2.2
+requests>=2.32
+streamlit>=1.42
+uvicorn>=0.34
+fastapi>=0.115,<0.130

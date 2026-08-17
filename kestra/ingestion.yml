@@ -1,0 +1,65 @@
+id: marapal_ingestion
+namespace: marapal
+description: Fetch, normalize, index, and evaluate all MaraPal data.
+
+inputs:
+  - id: project_dir
+    type: STRING
+    defaults: /workspace/MaraPal
+
+tasks:
+  - id: ingest
+    type: io.kestra.plugin.core.flow.WorkingDirectory
+    tasks:
+      - id: parse_wiki
+        type: io.kestra.plugin.scripts.shell.Commands
+        taskRunner:
+          type: io.kestra.plugin.core.runner.Process
+        commands:
+          - cd {{ inputs.project_dir }} && uv run python ingest/wiki.py
+        retry:
+          type: constant
+          interval: PT30S
+          maxAttempt: 3
+
+      - id: fetch_races
+        type: io.kestra.plugin.scripts.shell.Commands
+        taskRunner:
+          type: io.kestra.plugin.core.runner.Process
+        commands:
+          - cd {{ inputs.project_dir }} && uv run python ingest/dlv_calendar.py --out data/raw/races/dlv/{{ execution.startDate | date('yyyy-MM-dd') }}.jsonl
+        retry:
+          type: constant
+          interval: PT1M
+          maxAttempt: 3
+
+      - id: index_chroma
+        type: io.kestra.plugin.scripts.shell.Commands
+        taskRunner:
+          type: io.kestra.plugin.core.runner.Process
+        env:
+          OPENAI_API_KEY: "{{ secret('OPENAI_API_KEY') }}"
+        commands:
+          - cd {{ inputs.project_dir }} && uv run marapal index
+
+      - id: import_races
+        type: io.kestra.plugin.scripts.shell.Commands
+        taskRunner:
+          type: io.kestra.plugin.core.runner.Process
+        commands:
+          - cd {{ inputs.project_dir }} && uv run marapal import-races data/raw/races/dlv/{{ execution.startDate | date('yyyy-MM-dd') }}.jsonl
+
+      - id: retrieval_evaluation
+        type: io.kestra.plugin.scripts.shell.Commands
+        taskRunner:
+          type: io.kestra.plugin.core.runner.Process
+        env:
+          OPENAI_API_KEY: "{{ secret('OPENAI_API_KEY') }}"
+        commands:
+          - cd {{ inputs.project_dir }} && uv run python -m eval.retrieval
+
+triggers:
+  - id: weekly_refresh
+    type: io.kestra.plugin.core.trigger.Schedule
+    cron: "0 4 * * 1"
+    timezone: Europe/Berlin

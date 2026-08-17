@@ -1,0 +1,13 @@
+[Unit]
+Description=ngrok tunnel for MaraPal Streamlit
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/home/yolanda/.local/bin/ngrok http 8501 --log=stdout
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

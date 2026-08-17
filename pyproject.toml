@@ -1,12 +1,41 @@
 [project]
 name = "marapal"
 version = "0.1.0"
-description = "Add your description here"
+description = "MaraPal Coach: an evidence-aware running assistant by MaraPal"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.11"
 dependencies = [
-    "numpy>=2.0",
+    "fastapi>=0.115,<0.130",
+    "langchain>=0.3",
+    "langchain-chroma>=0.2",
+    "langchain-openai>=0.3",
+    "langgraph>=0.4",
+    "langsmith>=0.3",
     "pyyaml>=6.0.3",
-    "qdrant-client>=1.15",
-    "sentence-transformers>=5.0",
+    "python-dotenv>=1.1",
+    "rank-bm25>=0.2.2",
+    "requests>=2.32",
+    "streamlit>=1.42",
+    "uvicorn>=0.34",
 ]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = ["main"]
+
+[tool.setuptools.packages.find]
+include = ["rag*"]
+
+[project.scripts]
+marapal = "main:main"
+
+[dependency-groups]
+dev = ["deepeval>=3.8", "google-genai>=1.0", "httpx>=0.28", "pytest>=8.3"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = ["-p", "no:rerunfailures"]
