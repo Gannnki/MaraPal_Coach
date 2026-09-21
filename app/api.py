@@ -58,10 +58,22 @@ class AskRequest(BaseModel):
     question: str = Field(min_length=3, max_length=2000)
 
 
-class Source(BaseModel):
+class PrimarySource(BaseModel):
+    label: str | None = None
     title: str | None = None
+    resource: str | None = None
+    wiki_url: str | None = None
+
+
+class Source(BaseModel):
+    number: int
+    title: str | None = None
+    section: str | None = None
     url: str | None = None
     evidence: str | None = None
+    chunk_id: str | None = None
+    primary_sources: list[PrimarySource] = Field(default_factory=list)
+    cited_in_answer: bool = False
 
 
 class AskResponse(BaseModel):

@@ -105,12 +105,24 @@ if "submitted_feedback" not in st.session_state:
 
 
 def show_sources(sources: list[dict]) -> None:
+    if not sources:
+        return
+    st.markdown("**Sources**")
     for source in sources:
-        if source.get("url"):
-            st.caption(
-                f"[{source.get('title') or 'running.wiki'}]({source['url']}) · "
-                f"evidence: {source.get('evidence') or 'not graded'}"
-            )
+        number = source.get("number", "?")
+        title = source.get("title") or "running.wiki"
+        section = f" — {source['section']}" if source.get("section") else ""
+        evidence = source.get("evidence") or "not graded"
+        page = f"[{title}]({source['url']})" if source.get("url") else title
+        st.markdown(f"**[{number}]** {page}{section} · evidence: `{evidence}`")
+        primary_sources = source.get("primary_sources", [])
+        if primary_sources:
+            with st.expander(f"Primary research for source [{number}]"):
+                for primary in primary_sources:
+                    label = primary.get("title") or primary.get("label") or "Primary source"
+                    url = primary.get("resource") or primary.get("wiki_url")
+                    st.markdown(f"- [{label}]({url})" if url else f"- {label}")
+    st.caption("Knowledge source: running.wiki (MIT licensed).")
 
 
 def show_feedback(message: dict) -> None:

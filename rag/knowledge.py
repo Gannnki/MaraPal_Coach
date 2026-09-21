@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,8 @@ from langchain_openai import OpenAIEmbeddings
 from pydantic import SecretStr
 
 from .config import Settings
+
+CITATION_RE = re.compile(r"\[(\d+)\]")
 
 CORE_PROMPT = """You are MaraPal Coach, an evidence-aware running assistant by MaraPal. Answer only from
 the supplied running.wiki context. If it is insufficient, say so. Preserve the
@@ -149,15 +152,30 @@ def answer_knowledge(
             "answer_instructions": answer_instructions,
         }
     )
-    sources = [
-        {
-            "title": doc.metadata.get("title"),
-            "url": doc.metadata.get("url"),
-            "evidence": doc.metadata.get("evidence"),
-        }
-        for doc in documents
-    ]
-    return str(response.content), sources
+    answer = str(response.content)
+    cited_numbers = {int(value) for value in CITATION_RE.findall(answer)}
+    valid_numbers = set(range(1, len(documents) + 1))
+    invalid_numbers = cited_numbers - valid_numbers
+    if invalid_numbers:
+        invalid = ", ".join(f"[{number}]" for number in sorted(invalid_numbers))
+        raise ValueError(f"model returned citation(s) outside the supplied context: {invalid}")
+
+    sources = []
+    for number, doc in enumerate(documents, 1):
+        metadata = doc.metadata
+        sources.append(
+            {
+                "number": number,
+                "title": metadata.get("title"),
+                "section": metadata.get("section"),
+                "url": metadata.get("url"),
+                "evidence": metadata.get("evidence"),
+                "chunk_id": metadata.get("chunk_id") or doc.id,
+                "primary_sources": _metadata_json(metadata, "citations"),
+                "cited_in_answer": number in cited_numbers,
+            }
+        )
+    return answer, sources
 
 
 def generate_from_documents(

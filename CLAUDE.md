@@ -1,93 +1,125 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code when working in this repository.
 
-## Project state
+MaraPal Coach is a chatbot with two jobs: answer running-training questions from
+[running.wiki](https://running.wiki) (RAG), and list **German** running events
+(exact filters over SQLite). It is an LLM Zoomcamp course project, not production.
 
-The application uses LangChain, LangGraph, LangSmith, ChromaDB, and SQLite. See
-`README.md` for the current commands and architecture.
+## Tech stack
+
+- **Language / tooling:** Python 3.13 (`>=3.11`), `uv` for dependencies (`uv.lock` is committed).
+- **Orchestration:** LangGraph (router → knowledge / races / mixed), LangChain, LangSmith tracing (opt-in).
+- **Storage:** ChromaDB for knowledge prose, SQLite for race events and monitoring.
+- **Retrieval:** vector (default, best on the eval set), BM25 (`rank-bm25`) and hybrid RRF; switch with `MARAPAL_RETRIEVAL_MODE` or `marapal ask --retrieval-mode`.
+- **Models:** OpenAI `gpt-4.1-mini` (chat) and `text-embedding-3-small` (embeddings).
+- **Serving:** FastAPI + uvicorn backend, Streamlit frontend, Docker Compose.
+- **Ingestion schedule:** Kestra (backed by Postgres), weekly, Mondays 04:00 Europe/Berlin.
+- **Dev / eval:** pytest, DeepEval GEval with a Gemini judge.
+
+## Project structure
+
+| Path | Purpose |
+|---|---|
+| `main.py` | CLI (`marapal`): `index`, `import-races`, `ask` |
+| `rag/` | Core logic, no web framework: `graph.py` (LangGraph), `knowledge.py` (Chroma, prompts, citation check), `retrieval.py`, `races.py` (SQLite schema, `RaceFilters`, search), `style.py`, `monitoring.py`, `config.py` (all settings) |
+| `app/` | `api.py` (FastAPI: `/api/v1/ask`, `/feedback`, `/validate-key`, `/monitoring`), `streamlit_app.py` (UI, talks to the API over HTTP), `monitoring_page.py`, `pages/` |
+| `ingest/` | Offline scripts that write JSONL: `wiki.py` (running.wiki chunks), `dlv_calendar.py` (DLV race calendar, stdlib only) |
+| `eval/` | Retrieval and generation evaluation plus their datasets |
+| `tests/` | Offline pytest suite |
+| `kestra/ingestion.yml` | Weekly ingestion flow |
+| `docker/`, `docker-compose.yaml` | Images and stack: `api`, `streamlit`, `postgres`, `kestra` |
+| `deploy/` | systemd unit for the ngrok demo tunnel |
+| `data/` | `raw/README.md` (source notes) is tracked; `raw/running-wiki`, `raw/races`, `processed/`, `vector/` are gitignored |
+
+## Running the project
+
+### Environment (`.env`, copy from `.env.example`)
+
+| Variable | Needed for |
+|---|---|
+| `OPENAI_API_KEY` | Building the Chroma index and evals. App users enter their own key in the Streamlit sidebar; the API reads it from the `X-OpenAI-API-Key` header and never stores it |
+| `KESTRA_DB_USER`, `KESTRA_DB_PASSWORD`, `KESTRA_DB_NAME` | Postgres and Kestra. **Compose refuses to start any service if these are empty** |
+| `KESTRA_SECRET_OPENAI_API_KEY` | Base64 of the OpenAI key, exposed to Kestra. Also required by Compose |
+| `GOOGLE_API_KEY` | Generation eval (Gemini judge) only |
+| `LANGSMITH_TRACING`, `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT` | Optional tracing; off by default |
+| `MARAPAL_*` | Optional overrides of paths, models, retrieval mode (see `rag/config.py`) |
+
+### Docker Compose
 
 ```bash
-# Fetch and normalise the German race calendar (no dependencies beyond stdlib)
-python ingest/dlv_calendar.py --out data/raw/races/dlv/$(date +%F).jsonl
+git clone https://github.com/jacquescorbytuech/running-knowledge-base data/raw/running-wiki
+cp .env.example .env            # then fill it in
+
+docker compose build api
+# One-time data setup. Use `python main.py`, not `marapal`: the console script
+# fails inside the container with "No module named 'rag'".
+docker compose run --rm api python ingest/wiki.py --wiki data/raw/running-wiki --out /data/processed/knowledge.jsonl
+docker compose run --rm api python main.py index --input /data/processed/knowledge.jsonl
+docker compose run --rm api python ingest/dlv_calendar.py --out /data/processed/races.jsonl
+docker compose run --rm api python main.py import-races /data/processed/races.jsonl
+
+docker compose up -d --build    # start everything
+docker compose ps
+docker compose down             # stop
 ```
 
-`rag/` contains the query workflow and `tests/` contains the initial unit suite.
+| Service | URL |
+|---|---|
+| Streamlit | http://localhost:8501 |
+| API and docs | http://localhost:8000/docs |
+| Monitoring | http://localhost:8000/monitoring |
+| Kestra | http://localhost:8080 |
 
-## What this project is
+Images copy the code at build time. After editing code, rebuild (`docker compose up -d --build`)
+before running scripts through `docker compose run`. If a port is taken, change the host side in
+`docker-compose.yaml`.
 
-MaraPal is a chatbot with two jobs: answer running-training questions from [running.wiki](https://running.wiki), and tell the user **which running events in Germany they can still enter**.
+### Without Docker
 
-Race scope is Germany only. Do not add US sources — an earlier draft of this file recommended RunSignup, which is US-focused and near-useless here.
-
-The project was originally scoped as a women-specific marathon RAG and was re-scoped to general running on 2026-07-30. Women's-health topics are still covered — they are part of the upstream knowledge base (`concepts/the-female-runner.md`, `concepts/menstrual-cycle-and-training.md`, `concepts/pregnancy-and-postpartum-running.md`, `nutrition/red-s.md`, `nutrition/iron.md`) — they are simply no longer the exclusive focus.
-
-## The two-subsystem split — the central design decision
-
-Knowledge questions and race questions need different retrieval, and conflating them is the main way this project can go wrong.
-
+```bash
+uv sync
+uv run uvicorn app.api:app --port 8000
+uv run streamlit run app/streamlit_app.py     # MARAPAL_API_URL defaults to http://localhost:8000
+uv run marapal ask "Show me five half marathons in Bayern."
 ```
-                        ┌─ knowledge question ─→ vector store ─→ RAG answer + citations
-   user query ─→ router ─┤
-                        └─ race question ──────→ structured store ─→ filtered event list
+
+## Tests
+
+```bash
+uv sync --dev                # pytest, deepeval and friends live in the dev group
+uv run pytest -q             # full suite; offline, no OpenAI / Gemini / LangSmith calls
+uv run pytest tests/test_dlv_calendar.py -q   # one file
 ```
 
-**Knowledge** is static prose. Semantic retrieval is correct. Answers must carry citations and an evidence grade.
+CI (`.github/workflows/ci.yml`) runs `uv sync --locked --dev` and `uv run pytest -q`, then builds both images.
 
-**Race data** is time-sensitive structured records. Retrieval is exact filtering — date range, geographic radius, distance, price, registration status. Do **not** put race listings in the vector store: "marathons within 100km in October" is a filter, and semantic similarity would return races that *sound* alike rather than races that *match*. Use a relational store and let the LLM call it as a tool.
+Evaluations call paid APIs and are not part of the suite:
 
-A race record that is stale is not merely unhelpful, it is wrong — a runner can miss a registration deadline. Freshness is a correctness property, not a nice-to-have. Every event record carries a fetch timestamp.
+```bash
+uv run python -m eval.retrieval                 # needs OPENAI_API_KEY
+uv run python -m eval.generation --limit 3      # needs OPENAI_API_KEY and GOOGLE_API_KEY
+```
 
-### Never infer registration status from the date
+## Design rules
 
-This is the rule most likely to be broken by accident, because inferring is easy and looks right in testing.
-
-The DLV calendar carries no registration status. `ingest/dlv_calendar.py` writes `registration_status: "unknown"` and leaves it. A future event date does **not** mean entry is open — the race may be sold out, which is the case a runner most needs to know about.
-
-Two consequences for anything built on top:
-
-- Resolve status **lazily**, for events a user actually asks about, and cache with a timestamp. Do not crawl ~1,100 organiser sites on a schedule.
-- When status is `unknown`, say so and give the registration link with a last-checked time. Never let the LLM smooth `unknown` into "yes, still open" — that is the failure mode that wastes the user's plans.
-
-German events use a status ladder rather than a boolean, because past the `Meldeschluss` most still accept a `Nachmeldung` (with a surcharge, at the expo, sometimes on race morning): `not_yet_open` / `open` / `late_only` / `sold_out` / `closed` / `unknown`.
-
-### Source constraint
-
-[runme.de](https://www.runme.de) has the best German coverage and its `robots.txt` explicitly blocks `GPTBot`, `OpenAI` and `CCBot`. It has opted out of AI use. Do not ingest it, however tempting the coverage. Full source assessment is in `data/raw/README.md`.
-
-## Upstream: running.wiki
-
-Source repo: [jacquescorbytuech/running-knowledge-base](https://github.com/jacquescorbytuech/running-knowledge-base), **MIT licensed**, ~200 content articles plus 620 source pages, authored as markdown with YAML frontmatter.
-
-**Clone the repo; never scrape the site.** The repo is the authored form with frontmatter and citation links intact. Pin to a commit rather than tracking `main`, and record the SHA with the processed output — otherwise an upstream edit silently changes your answers between evaluation runs.
-
-Full schema, directory breakdown, and ingest notes are in `data/raw/README.md`. The three rules that matter most:
-
-1. **The `evidence` grade must survive into retrieval metadata and into the answer.** The upstream wiki's entire value is that it grades claims honestly (`strong` / `moderate` / `limited` / `weak` / `contested`). A chunk that arrives at generation time without its grade is worse than no chunk, because it reads as confident. If the retrieved context is `weak`, the answer must say so.
-2. **Preserve the citation chain.** Claims link to pages under `sources/`, which link to the primary paper. Relative markdown links (`../sources/foo.md`) break once text leaves the repo — resolve them during processing.
-3. **One concept per file** — the file is the natural chunk boundary. Exclude `index.md` files; they are navigation, not content.
-
-The upstream editorial line is non-commercial: no affiliate links, no brand promotion, no buyer's guides. Inheriting that is deliberate. Do not add product recommendations or affiliate links to generated answers — it would break the licence's spirit and destroy the trust property the knowledge base exists to provide.
-
-## Attribution and licence
-
-MIT requires the licence and copyright notice be preserved in distribution. Answers should credit running.wiki. Race platform APIs (RunSignup is Apache-licensed) have their own attribution terms — check before shipping.
-
-Every health, injury, or nutrition page upstream carries a "Not medical advice" warning. Generated answers on those topics should carry the equivalent.
-
-## Technology choices
-
-Keep provider and storage choices centralized in `rag/config.py`: ChromaDB for prose,
-SQLite for events, OpenAI embeddings and chat models, and opt-in
-LangSmith tracing. Never move race records into ChromaDB.
-
-## Evaluation
-
-`eval/` measures retrieval and generation separately. Beyond the usual retrieval metrics, two project-specific properties are worth testing:
-
-- **Grade fidelity** — does a `weak`-graded retrieval produce a suitably hedged answer, or does the LLM launder it into confidence?
-- **Router accuracy** — are knowledge questions and race questions dispatched to the right subsystem? Mixed queries ("what should I run after my first marathon, and what's near me in November?") need both.
-
-## Empty README sections
-
-`README.md` ends with three deliberately empty headings — "Running the project", "Evaluation results", "Monitoring and feedback". Fill these in as the corresponding functionality is built.
+- **Two subsystems, never mixed.** Knowledge is prose in ChromaDB (semantic search). Race events are
+  time-sensitive structured records in SQLite (exact filters). Never put race records in ChromaDB.
+  The LLM only extracts `RaceFilters`; a fixed SQL query does the search.
+- **Never infer registration status from the date.** The DLV calendar has none, so ingestion writes
+  `unknown`. A future date does not mean entry is open (it may be sold out). When status is `unknown`,
+  say so and give the link and last-checked time. Ladder: `not_yet_open` / `open` / `late_only` /
+  `sold_out` / `closed` / `unknown`. Resolve status lazily per asked event, not by crawling.
+- **Freshness is correctness.** Every race record carries `fetched_at`. `ingest/dlv_calendar.py` uses an
+  undocumented laufen.de endpoint that has already moved once; it fails loudly and warns when the
+  parsed count differs from the site's `total`.
+- **Germany only.** No US race sources. Do not ingest runme.de: its `robots.txt` blocks AI crawlers.
+  Source assessment is in `data/raw/README.md`.
+- **Keep the evidence grade and citations.** running.wiki grades claims (`strong` / `moderate` /
+  `limited` / `weak` / `contested`). The grade must reach the prompt and the answer; weak evidence must
+  be hedged. Resolve relative `sources/` links at ingest time. Skip `index.md` files.
+- **Upstream wiki:** clone it, never scrape. Pin the commit SHA in processed output.
+- **Non-commercial.** No product recommendations or affiliate links. Health, injury and nutrition answers
+  end with a "Not medical advice" note. Credit running.wiki (MIT) in answers.
+- **Provider and storage choices live in `rag/config.py`.**
+- **Never store or trace the user's OpenAI key.** It is injected into the provider clients per request only.

@@ -11,6 +11,24 @@ class FakeGraph:
         }
 
 
+class CitationGraph:
+    def invoke(self, state, config=None):
+        return {
+            "answer": "Grounded answer [1].", "route": "knowledge",
+            "answer_style": "neutral", "answer_detail": "standard",
+            "sources": [{
+                "number": 1, "title": "Lactate threshold", "section": "Definition",
+                "url": "https://running.wiki/concepts/lactate-threshold",
+                "evidence": "strong", "chunk_id": "concepts/lactate-threshold#definition",
+                "cited_in_answer": True,
+                "primary_sources": [{
+                    "title": "Faude et al. 2009",
+                    "resource": "https://example.test/faude-2009",
+                }],
+            }],
+        }
+
+
 def test_api_routes_and_request_validation():
     app = create_app(settings=Settings(), graph_factory=lambda *args, **kwargs: FakeGraph())
     paths = {route.path for route in app.routes}
@@ -51,6 +69,21 @@ def test_ask_passes_secret_to_graph_factory_without_tracing_it(tmp_path):
 
     assert response.status_code == 200
     assert captured["api_key"].get_secret_value() == "sk-test-secret"
+
+
+def test_ask_returns_numbered_source_and_primary_attribution(tmp_path):
+    settings = Settings(monitoring_db=tmp_path / "monitoring.sqlite3")
+    app = create_app(settings=settings, graph_factory=lambda *args, **kwargs: CitationGraph())
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/ask", json={"question": "What is LT1?"},
+            headers={"X-OpenAI-API-Key": "sk-test-secret"},
+        )
+
+    source = response.json()["sources"][0]
+    assert source["number"] == 1
+    assert source["cited_in_answer"] is True
+    assert source["primary_sources"][0]["resource"] == "https://example.test/faude-2009"
 
 
 def test_validate_key_accepts_valid_key_without_exposing_it(tmp_path):

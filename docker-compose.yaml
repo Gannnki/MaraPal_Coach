@@ -15,7 +15,7 @@ services:
       MARAPAL_KNOWLEDGE_PATH: /data/processed/knowledge.jsonl
 
     ports:
-      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:8001:8000"
 
     volumes:
       - ./data/vector/chroma:/data/chroma
@@ -44,7 +44,7 @@ services:
       MARAPAL_API_URL: http://api:8000
 
     ports:
-      - "127.0.0.1:8501:8501"
+      - "127.0.0.1:8502:8501"
 
     depends_on:
       api:
