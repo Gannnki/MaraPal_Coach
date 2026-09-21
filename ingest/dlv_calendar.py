@@ -2,8 +2,9 @@
 
 The calendar is the official event register of the Deutscher Leichtathletik-Verband:
 every run sanctioned by one of the 19 regional athletics associations appears here.
-It is served by an undocumented AJAX endpoint that returns a JSON envelope whose
-`events` field is a block of HTML teasers, one per event.
+It is served by an undocumented, paginated AJAX search endpoint. Each page is a JSON
+envelope whose `topevents` and `events` fields are blocks of HTML teasers, one per
+event; the script walks every page and checks the parsed count against `total`.
 
 What this gives you: the event universe -- name, date, place, distances, organiser link.
 What it does NOT give you: registration status, deadline or price. See
@@ -21,13 +22,18 @@ import html
 import json
 import re
 import sys
+import time
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Iterator
 
-ENDPOINT = "https://www.laufen.de/dlv-laufkalender/ajax"
-DETAIL_BASE = "https://www.laufen.de/"
+ENDPOINT = "https://laufen.de/laufkalender/ajax/search"
+DETAIL_BASE = "https://laufen.de/"
 USER_AGENT = "MaraPal/0.1 (running event aggregator; +https://github.com/)"
+# Pause between page requests: ~22 sequential requests, so stay well clear of
+# anything that looks like hammering the site.
+PAGE_DELAY_SECONDS = 1.0
 
 # One teaser block per event. The href is either an internal detail page or the
 # organiser's own website -- which one you get is not consistent across events.
@@ -35,30 +41,56 @@ TEASER_RE = re.compile(r'<a href="([^"]*)"(.*?)class="teaser event">(.*?)</a>', 
 DATE_RE = re.compile(r'class="date">\s*([^<]+?)\s*<')
 HEADLINE_RE = re.compile(r'class="headline[^"]*">\s*(.*?)\s*</div>', re.S)
 LOCATION_RE = re.compile(r'class="location">\s*(.*?)\s*</div>', re.S)
-STRECKEN_RE = re.compile(r"Strecken:\s*([^<]+?)\s*<")
+# "Strecken:" for several distances, "Strecke:" when an event has exactly one.
+STRECKEN_RE = re.compile(r"Strecken?:\s*([^<]+?)\s*<")
 CODE_RE = re.compile(r'class="code">\s*([^<]+?)\s*<')
 # "87730 Bad Grönenbach" -- German postcodes are always five digits.
 PLACE_RE = re.compile(r"^(\d{5})\s+(.*)$")
 
 
-def fetch() -> dict:
-    """Call the calendar endpoint and return the parsed JSON envelope.
+def fetch_page(page: int) -> dict:
+    """POST one page of the unfiltered calendar and return its JSON envelope.
 
-    The endpoint exposes filters (date range, radius, distance) on its `user`
-    object, but they are session state -- passing them as GET or POST parameters
-    is ignored and the full calendar comes back regardless. So we take the whole
-    thing in one request and filter locally, which is what we want anyway.
+    The search form is submitted as urlencoded POST fields. Empty `start`/`end`
+    mean "from today, no upper bound"; date filtering is done locally afterwards
+    so the stored snapshot does not depend on the site's search semantics.
     """
+    body = urllib.parse.urlencode({
+        "search": "", "radius": "25", "start": "", "end": "",
+        "distance_start": "", "distance_end": "", "distances": "[]",
+        "page": page,
+    }).encode("ascii")
     req = urllib.request.Request(
         ENDPOINT,
+        data=body,
         headers={
             "User-Agent": USER_AGENT,
             "Accept": "application/json",
+            "Content-Type": "application/x-www-form-urlencoded",
             "X-Requested-With": "XMLHttpRequest",
         },
     )
     with urllib.request.urlopen(req, timeout=60) as resp:
         return json.loads(resp.read().decode("utf-8"))
+
+
+def fetch() -> dict:
+    """Walk every page and return `{"events": <all teaser HTML>, "total": n}`.
+
+    Page 1 carries the promoted "topevents" teasers in addition to `events`;
+    later pages only carry `events`. Both are the same teaser markup, so they
+    are concatenated. `total` is the site's own count, used to detect a
+    shortfall.
+    """
+    first = fetch_page(1)
+    pages = int(first.get("pages") or 1)
+    chunks = [first.get("topevents", ""), first.get("events", "")]
+    for page in range(2, pages + 1):
+        time.sleep(PAGE_DELAY_SECONDS)
+        data = fetch_page(page)
+        chunks.append(data.get("topevents", ""))
+        chunks.append(data.get("events", ""))
+    return {"events": "".join(chunks), "total": first.get("total")}
 
 
 def _text(match: re.Match | None) -> str:
@@ -79,8 +111,14 @@ def parse_events(payload: dict) -> Iterator[dict]:
     """Yield one normalised record per event teaser in the payload."""
     fetched_at = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
 
+    seen: set[str] = set()
     for match in TEASER_RE.finditer(payload.get("events", "")):
         href, _attrs, body = match.groups()
+        # The site can shift events between pages while we paginate; the href
+        # identifies an event uniquely, so a repeat is the same event.
+        if href in seen:
+            continue
+        seen.add(href)
         date_raw = _text(DATE_RE.search(body))
         try:
             date = dt.datetime.strptime(date_raw, "%d.%m.%Y").date().isoformat()
@@ -136,15 +174,20 @@ def main() -> int:
     if args.end:
         records = [r for r in records if r["date"] <= args.end.isoformat()]
 
-    declared = payload.get("results")
+    declared = payload.get("total")
     if declared and declared != parsed_total:
-        # The endpoint reports a total that exceeds what it renders in one
-        # response. Say so loudly: a silent shortfall reads as full coverage.
+        # Say so loudly: a silent shortfall reads as full coverage.
         print(
-            f"warning: endpoint declared {declared} results but only "
-            f"{parsed_total} were parsed ({declared - parsed_total} missing)",
+            f"warning: endpoint declared {declared} events but {parsed_total} "
+            f"were parsed (difference: {declared - parsed_total})",
             file=sys.stderr,
         )
+    if parsed_total == 0:
+        # Zero events means the endpoint or markup moved, not an empty calendar.
+        # Fail before writing so a bad run cannot replace a good snapshot.
+        print("error: no events parsed; the endpoint or its markup has changed",
+              file=sys.stderr)
+        return 1
     if parsed_total != len(records):
         print(f"date filter kept {len(records)} of {parsed_total} events", file=sys.stderr)
 

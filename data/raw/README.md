@@ -81,19 +81,19 @@ Unlike the wiki, this data **expires**. A race that has happened, filled up, or 
 python ingest/dlv_calendar.py --out data/raw/races/dlv/$(date +%F).jsonl
 ```
 
-It calls an undocumented AJAX endpoint, `https://www.laufen.de/dlv-laufkalender/ajax`, which returns a JSON envelope whose `events` field is a block of HTML teasers. Server-side filters exist on the `user` object: `start` and `end` (unix timestamps), `radius`, `distanceStart`/`distanceEnd`, and `search`.
+It calls an undocumented, paginated AJAX search endpoint: `POST https://laufen.de/laufkalender/ajax/search` with urlencoded form fields (`search`, `radius`, `start`, `end`, `distance_start`, `distance_end`, `distances`, `page`). Each response is a JSON envelope with `total`, `pages` and `page`, and two blocks of HTML teasers: `topevents` (promoted events, page 1 only) and `events`. Pages hold 30 events. The script walks every page with a one-second pause, then filters by date locally rather than relying on the site's search semantics.
 
-Being undocumented, it can change without notice. The parser is regex over markup — if it starts returning zero events, the markup moved. That is the expected failure mode and it is loud, not silent.
+Being undocumented, it can change without notice. The parser is regex over markup. The endpoint has already moved once: `www.laufen.de/dlv-laufkalender/ajax` (one unpaginated response) became `laufen.de/laufkalender/ajax/search` (paginated) and started answering 404 to the old path. If the script parses zero events it exits with an error before writing anything, so a broken run cannot replace a good snapshot. If the parsed count differs from the site's own `total`, it prints a warning naming the gap.
 
-**Known shortfall:** the endpoint declares ~1,396 results but renders ~1,111 parseable teasers in a single response. The script prints a warning naming the gap rather than reporting apparent full coverage. Worth investigating whether the remainder is behind pagination.
+Verified yield as of 2026-09-21: 654 events, exactly the declared `total`, from 2026-09-22 to 2030-03-10 (dense through December 2026, sparse afterwards). 646 have postcodes and 650 have parsed distances. All 654 link to a `laufen.de` detail page; none link directly to the organiser's own site, which the earlier endpoint did for most events. `robots.txt` was re-checked after the move and still disallows only `/contao/` and `/_contao/`.
 
-Verified yield as of 2026-07-30: 1,111 events, 1,104 with postcodes, 917 with parsed distances, spanning to November 2027. About 1,000 of the 1,000-odd entries link to an organiser's own site rather than a `laufen.de` detail page.
+Distances appear as `Strecken: 0,4 bis 10 Kilometer` for several distances and `Strecke: 5 Kilometer` for exactly one. Both forms must be parsed; matching only the plural silently dropped about 15% of current events (101 of 654) from any distance filter.
 
 ### Source assessment
 
 | Source | Coverage | Registration status | Usable |
 |---|---|---|---|
-| [laufen.de / DLV](https://www.laufen.de/laufkalender) | ~1,400 sanctioned German events | No | **Yes** — official, free, permissive `robots.txt` (only `/contao/` disallowed) |
+| [laufen.de / DLV](https://laufen.de/laufkalender) | ~650 upcoming sanctioned German events (2026-09-21) | No | **Yes** — official, free, permissive `robots.txt` (only `/contao/` and `/_contao/` disallowed) |
 | [runme.de](https://www.runme.de) | Largest German-language calendar | — | **No.** Its `robots.txt` explicitly blocks `GPTBot`, `OpenAI` and `CCBot`. Do not ingest it |
 | [ahotu](https://www.ahotu.com) | 60,000 races, 194 countries, has registration data | Yes | Not without permission — Cloudflare-protected and the API is partner/commercial. Worth approaching if the project gets serious |
 | [raceresult](https://www.raceresult.com) | Events hosted on their platform; German company, GDPR-hosted | Yes, for its own events | Possible — API access needs to be arranged with them |
